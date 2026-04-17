@@ -8,13 +8,7 @@ pipeline {
 
     stages {
 
-        stage('Clean WorkSpace') {
-            steps {
-                cleanWs()
-            }
-        }
-
-        stage('Checkout From SCM') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
                     credentialsId: 'GitHub',
