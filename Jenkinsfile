@@ -1,34 +1,37 @@
-jenkins {
-  agent {label 'jenkins-agent'}
+pipeline {
+    agent { label 'jenkins-agent' }
 
-  tools {
-      jdk 'java17'
-      maven 'Maven3'
-  }
+    tools {
+        jdk 'java17'
+        maven 'Maven3'
+    }
 
-  stages {
-     stage ('Clean WorkSpace'){
-      steps 
-      {
-        cleanWs()
-      }
-  }
+    stages {
 
-    stage ('Checkout From SCM'){
-      steps {
-        git branch: 'main', credentialsId: 'GitHub', usl: 'https://gitHub.com/https://github.com/SROR7/register-app'
-      }
-  }
+        stage('Clean WorkSpace') {
+            steps {
+                cleanWs()
+            }
+        }
 
-    stage ('Build Application') {
-      steps {
-        sh 'mvn clean package'
-      }
-  }
+        stage('Checkout From SCM') {
+            steps {
+                git branch: 'main',
+                    credentialsId: 'GitHub',
+                    url: 'https://github.com/SROR7/register-app.git'
+            }
+        }
 
-    stage ('Test Application'){
-      steps{
-        sh 'mvn test'
-      }
-  }
+        stage('Build Application') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Test Application') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+    }
 }
