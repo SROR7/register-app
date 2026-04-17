@@ -31,7 +31,4 @@ jenkins {
         sh 'mvn test'
       }
   }
-
-
-
 }
