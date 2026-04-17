@@ -49,18 +49,29 @@ pipeline {
             }
         }
 
-        stage('Build And Push Docker Image') {
+        stage('Docker Login') {
             steps {
-                script {
-
-                    def docker_image = docker.build("${DOCKER_IMAGE}:${RELEASE}")
-
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
-
-                        docker_image.push("${RELEASE}")
-                        docker_image.push("latest")
-                    }
+                withCredentials([string(credentialsId: 'docker', variable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                 }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $DOCKER_IMAGE:$RELEASE .'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh 'docker push $DOCKER_IMAGE:$RELEASE'
+            }
+        }
+
+        stage('Docker Logout') {
+            steps {
+                sh 'docker logout'
             }
         }
     }
