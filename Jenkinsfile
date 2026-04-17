@@ -29,12 +29,13 @@ pipeline {
         }
 
         stage('SonarQube Analysis'){
-            script{
-                withSonarQubeEnv('sonarqube'){
-                    sh "mvn sonar:sonar"
+            steps{
+                script{
+                    withSonarQubeEnv('sonarqube'){
+                        sh "mvn sonar:sonar"
+                    }
                 }
             }
         }
-        
     }
 }
