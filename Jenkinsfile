@@ -6,6 +6,13 @@ pipeline {
         maven 'Maven3'
     }
 
+    environment {
+        APP_NAME = 'register-app-pipeline'
+        RELEASE = '1.0.0'
+        DOCKER_USER = 'sror'
+        DOCKER_IMAGE = "${DOCKER_USER}/${APP_NAME}"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -30,18 +37,29 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                script {
-                    withSonarQubeEnv('sonarqube') {
-                        sh "mvn sonar:sonar"
-                    }
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
+                waitForQualityGate abortPipeline: true
+            }
+        }
+
+        stage('Build And Push Docker Image') {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: true
+
+                    def docker_image = docker.build("${DOCKER_IMAGE}:${RELEASE}")
+
+                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
+
+                        docker_image.push("${RELEASE}")
+                        docker_image.push("latest")
+                    }
                 }
             }
         }
