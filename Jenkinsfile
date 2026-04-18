@@ -55,11 +55,35 @@ pipeline {
 
                     def docker_image = docker.build("${DOCKER_IMAGE}:${RELEASE}")
 
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker') {
 
                         docker_image.push("${RELEASE}")
                         docker_image.push("latest")
                     }
+                }
+            }
+        }
+
+        stage("Trivy Scan") {
+            steps {
+                script {
+                    sh """
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image \
+                    ${DOCKER_IMAGE}:latest \
+                    --no-progress --scanners vuln \
+                    --exit-code 0 \
+                    --severity HIGH,CRITICAL \
+                    --format table
+                    """
+                }
+            }
+        }
+        
+        stage ('Cleanup Artifacts') {
+            steps {
+                script {
+                    sh "docker rmi ${DOCKER_IMAGE}:${RELEASE} || true"
+                    sh "docker rmi ${DOCKER_IMAGE}:latest || true"
                 }
             }
         }
