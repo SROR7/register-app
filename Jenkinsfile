@@ -55,7 +55,7 @@ pipeline {
 
                     def docker_image = docker.build("${DOCKER_IMAGE}:${RELEASE}")
 
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker') {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker') {
 
                         docker_image.push("${RELEASE}")
                         docker_image.push("latest")
