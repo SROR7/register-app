@@ -11,6 +11,7 @@ pipeline {
         RELEASE = '1.0.0'
         DOCKER_USER = 'sror'
         DOCKER_IMAGE = "${DOCKER_USER}/${APP_NAME}"
+        JENKINS_API_TOKEN = credentials('JENKINS_API_TOKEN')
     }
 
     stages {
@@ -53,13 +54,16 @@ pipeline {
             steps {
                 script {
 
-                    def docker_image = docker.build("${DOCKER_IMAGE}:${RELEASE}")
+                    def imageTag = "${RELEASE}-${env.BUILD_NUMBER}"
+
+                    def dockerImage = docker.build("${DOCKER_IMAGE}:${imageTag}")
 
                     docker.withRegistry('https://index.docker.io/v1/', 'docker') {
-
-                        docker_image.push("${RELEASE}")
-                        docker_image.push("latest")
+                        dockerImage.push(imageTag)
+                        dockerImage.push("latest")
                     }
+
+                    env.IMAGE_TAG = imageTag
                 }
             }
         }
@@ -69,7 +73,7 @@ pipeline {
                 script {
                     sh """
                     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image \
-                    ${DOCKER_IMAGE}:latest \
+                    ${DOCKER_IMAGE}:${IMAGE_TAG} \
                     --no-progress --scanners vuln \
                     --exit-code 0 \
                     --severity HIGH,CRITICAL \
@@ -78,12 +82,28 @@ pipeline {
                 }
             }
         }
-        
-        stage ('Cleanup Artifacts') {
+
+        stage('Cleanup') {
             steps {
                 script {
-                    sh "docker rmi ${DOCKER_IMAGE}:${RELEASE} || true"
+                    sh "docker rmi ${DOCKER_IMAGE}:${IMAGE_TAG} || true"
                     sh "docker rmi ${DOCKER_IMAGE}:latest || true"
+                }
+            }
+        }
+
+        stage("Trigger CD Pipeline") {
+            steps {
+                script {
+                    sh """
+                    curl -v -k \
+                    --user clouduser:${JENKINS_API_TOKEN} \
+                    -X POST \
+                    -H 'cache-control: no-cache' \
+                    -H 'content-type: application/x-www-form-urlencoded' \
+                    --data 'IMAGE_TAG=${IMAGE_TAG}' \
+                    'http://ec2-13-60-104-242.eu-north-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token'
+                    """
                 }
             }
         }
