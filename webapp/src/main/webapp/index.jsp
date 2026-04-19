@@ -30,5 +30,5 @@
   <div class="container signin">
     <p>Already have an account? <a href="#">Sign in</a>.</p>
   </div>
-  <h1> Thank You. See You soon </h1>   
+  <h1> Thank U </h1>   
 </form>
