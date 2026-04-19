@@ -1,20 +1,23 @@
 pipeline {
     agent { label 'jenkins-agent' }
-
     tools {
         jdk 'java17'
         maven 'Maven3'
     }
-
     environment {
-        APP_NAME = 'register-app-pipeline'
-        RELEASE = '1.0.0'
-        DOCKER_USER = 'sror'
-        DOCKER_IMAGE = "${DOCKER_USER}/${APP_NAME}"
+        APP_NAME   = 'register-app-pipeline'
+        RELEASE    = '1.0.0'
+        DOCKER_USER  = 'sror'
+        DOCKER_IMAGE = "sror/register-app-pipeline"
         JENKINS_API_TOKEN = credentials('JENKINS_API_TOKEN')
     }
-
     stages {
+
+        stage('CleanUp Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
 
         stage('Checkout') {
             steps {
@@ -53,59 +56,69 @@ pipeline {
         stage('Build And Push Docker Image') {
             steps {
                 script {
-
+                    // Build image tag once and store it
                     def imageTag = "${RELEASE}-${env.BUILD_NUMBER}"
+                    env.IMAGE_TAG = imageTag
 
                     def dockerImage = docker.build("${DOCKER_IMAGE}:${imageTag}")
-
                     docker.withRegistry('https://index.docker.io/v1/', 'docker') {
                         dockerImage.push(imageTag)
-                        dockerImage.push("latest")
+                        dockerImage.push('latest')
                     }
-
-                    env.IMAGE_TAG = imageTag
                 }
             }
         }
 
-        stage("Trivy Scan") {
+        stage('Trivy Scan') {
             steps {
-                script {
-                    sh """
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image \
-                    ${DOCKER_IMAGE}:${IMAGE_TAG} \
-                    --no-progress --scanners vuln \
-                    --exit-code 0 \
-                    --severity HIGH,CRITICAL \
-                    --format table
-                    """
-                }
+                // Single quotes — shell resolves $DOCKER_IMAGE and $IMAGE_TAG at runtime
+                sh '''
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        aquasec/trivy image \
+                        $DOCKER_IMAGE:$IMAGE_TAG \
+                        --no-progress \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
+                        --format table
+                '''
             }
         }
 
         stage('Cleanup') {
             steps {
-                script {
-                    sh "docker rmi ${DOCKER_IMAGE}:${IMAGE_TAG} || true"
-                    sh "docker rmi ${DOCKER_IMAGE}:latest || true"
-                }
+                sh '''
+                    docker rmi $DOCKER_IMAGE:$IMAGE_TAG || true
+                    docker rmi $DOCKER_IMAGE:latest    || true
+                '''
             }
         }
 
-        stage("Trigger CD Pipeline") {
+        stage('Trigger CD Pipeline') {
             steps {
-                script {
-                    sh """
-                    curl -v -k \
-                    --user SROR:${JENKINS_API_TOKEN} \
-                    -X POST \
-                    -H 'cache-control: no-cache' \
-                    -H 'content-type: application/x-www-form-urlencoded' \
-                    --data 'IMAGE_TAG=${IMAGE_TAG}' \
-                    'http://ec2-13-60-104-242.eu-north-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token'
-                    """
+                // withCredentials keeps the token out of Groovy interpolation
+                withCredentials([string(credentialsId: 'JENKINS_API_TOKEN', variable: 'API_TOKEN')]) {
+                    sh '''
+                        curl -v -k \
+                            --user "SROR:${API_TOKEN}" \
+                            -X POST \
+                            -H "cache-control: no-cache" \
+                            -H "content-type: application/x-www-form-urlencoded" \
+                            --data "IMAGE_TAG=${IMAGE_TAG}" \
+                            "http://51.20.65.24:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token"
+                    '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "CI pipeline complete — image ${DOCKER_IMAGE}:${env.IMAGE_TAG} deployed"
+        }
+        failure {
+            echo "CI pipeline failed"
         }
     }
 }
